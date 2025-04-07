@@ -160,5 +160,7 @@ def train_and_save_model(filepath, save_dir="recommendations/models"):
 
 # Run the function to train and save the model
 if __name__ == "__main__":
-    filepath = "Crop_recommendation.csv"  # Replace with your dataset path
+    filepath = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Crop_recommendation.csv") 
+    print(filepath)
+    # Replace with your dataset 
     train_and_save_model(filepath)
