@@ -102,22 +102,67 @@ def general_recommendation(request):
 
     return JsonResponse({"error": "Invalid request method"}, status=400)
 
-
 @csrf_exempt
 def next_crop(request):
     """
-    Endpoint to get recommended next crops based on crop rotation matrix.
-    Expects GET parameter: ?current_crop=<crop_name>
+    Endpoint to get recommended next crops based on crop rotation matrix and sensor data.
+    Expects POST JSON:
+    {
+        "N": float,
+        "P": float,
+        "K": float,
+        "temperature": float,
+        "humidity": float,
+        "ph": float,
+        "rainfall": float,
+        "previous_crop": str
+    }
     """
-    if request.method == "GET":
-        current_crop = request.GET.get("current_crop")
-        if not current_crop:
-            return JsonResponse({"error": "current_crop parameter is required"}, status=400)
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            required_fields = ["N", "P", "K", "temperature", "humidity", "ph", "rainfall", "previous_crop"]
 
-        next_crops = rotation_matrix.get(current_crop)
-        if not next_crops:
-            return JsonResponse({"error": "Current crop not found in rotation matrix"}, status=404)
+            # Check all required fields
+            for field in required_fields:
+                if field not in data:
+                    return JsonResponse({"error": f"Missing field: {field}"}, status=400)
 
-        return JsonResponse({"current_crop": current_crop, "recommended_next_crops": next_crops})
+            # Extract sensor data
+            sensor_data = {f: float(data[f]) for f in ["N", "P", "K", "temperature", "humidity", "ph", "rainfall"]}
+            previous_crop = data["previous_crop"]
+
+            # Get possible next crops from rotation matrix
+            possible_next_crops = rotation_matrix.get(previous_crop)
+            if not possible_next_crops:
+                return JsonResponse({"error": "Previous crop not found in rotation matrix"}, status=404)
+
+            # Filter possible crops based on sensor data and optimal ranges
+            suitable_crops = []
+            for crop in possible_next_crops:
+                if crop not in optimal_ranges:
+                    continue  # Skip crops without range info
+
+                crop_ranges = optimal_ranges[crop]
+                suitable = True
+                for feature, (min_val, max_val) in crop_ranges.items():
+                    value = sensor_data[feature]
+                    if value < min_val or value > max_val:
+                        suitable = False
+                        break
+                if suitable:
+                    suitable_crops.append(crop)
+
+            # If none are perfectly suitable, return all possible next crops
+            recommended_crops = suitable_crops if suitable_crops else possible_next_crops
+
+            return JsonResponse({
+                "previous_crop": previous_crop,
+                "recommended_next_crops": recommended_crops
+            })
+
+        except Exception as e:
+            logger.error(f"Error in next_crop: {str(e)}")
+            return JsonResponse({"error": str(e)}, status=400)
 
     return JsonResponse({"error": "Invalid request method"}, status=400)
