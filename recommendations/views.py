@@ -148,13 +148,10 @@ def next_crop(request):
                 crop_ranges = optimal_ranges[crop]
                 suitable = True
                 for feature, (min_val, max_val) in crop_ranges.items():
-                    min_val = float(min_val)
-                    max_val = float(max_val)
-                    value = float(sensor_data[feature])
+                    value = float(sensor_data[feature])  # Ensure scalar
                     if value < min_val or value > max_val:
                         suitable = False
                         break
-
 
                 if suitable:
                     suitable_crops.append(crop)
