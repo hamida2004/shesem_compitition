@@ -148,10 +148,13 @@ def next_crop(request):
                 crop_ranges = optimal_ranges[crop]
                 suitable = True
                 for feature, (min_val, max_val) in crop_ranges.items():
-                    value = float(sensor_data[feature])  # Ensure scalar
+                    min_val = float(min_val)
+                    max_val = float(max_val)
+                    value = float(sensor_data[feature])
                     if value < min_val or value > max_val:
                         suitable = False
                         break
+
 
                 if suitable:
                     suitable_crops.append(crop)
@@ -169,41 +172,3 @@ def next_crop(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return JsonResponse({"error": "Invalid request method"}, status=400)
-
-# def next_crop(request):
-#     if request.method != "POST":
-#         return JsonResponse({"error": "Invalid request method"}, status=400)
-
-#     try:
-#         data = json.loads(request.body)
-#         required_fields = ["N", "P", "K", "temperature", "humidity", "ph", "rainfall", "previous_crop"]
-#         valid, error_msg = validate_fields(data, required_fields)
-#         if not valid:
-#             return JsonResponse({"error": error_msg}, status=400)
-
-#         sensor_data = {f: float(data[f]) for f in ["N", "P", "K", "temperature", "humidity", "ph", "rainfall"]}
-#         previous_crop = data["previous_crop"]
-
-#         possible_next = rotation_matrix.get(previous_crop)
-#         if not possible_next:
-#             return JsonResponse({"error": "Previous crop not found in rotation matrix"}, status=404)
-
-#         suitable_crops = []
-#         for crop in possible_next:
-#             if crop not in optimal_ranges:
-#                 continue
-#             crop_ranges = optimal_ranges[crop]
-#             if all(crop_ranges[feature][0] <= sensor_data[feature] <= crop_ranges[feature][1]
-#                    for feature in sensor_data):
-#                 suitable_crops.append(crop)
-
-#         recommended = suitable_crops if suitable_crops else possible_next
-
-#         return JsonResponse({
-#             "previous_crop": previous_crop,
-#             "recommended_next_crops": recommended
-#         })
-
-#     except Exception as e:
-#         logger.exception("Error in next_crop")
-#         return JsonResponse({"error": str(e)}, status=500)
