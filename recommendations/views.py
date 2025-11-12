@@ -2,6 +2,7 @@ import json
 import logging
 import torch
 import joblib
+import random
 import pandas as pd
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
