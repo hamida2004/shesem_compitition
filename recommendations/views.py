@@ -104,18 +104,8 @@ def general_recommendation(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-@csrf_exempt
-import json
-import logging
-import random
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 
 logger = logging.getLogger(__name__)
-
-# افترض أن rotation_matrix و optimal_ranges موجودان مسبقًا
-# rotation_matrix = build_rotation_matrix()
-# optimal_ranges = joblib.load("recommendations/models/optimal_ranges.pkl")
 
 @csrf_exempt
 def next_crop(request):
