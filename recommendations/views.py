@@ -9,6 +9,9 @@ from django.views.decorators.csrf import csrf_exempt
 from .utils import CropRecommendationModel
 from .rotation import build_rotation_matrix
 
+
+
+
 logger = logging.getLogger(__name__)
 
 # Paths to saved model and preprocessing objects
