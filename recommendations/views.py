@@ -1,6 +1,5 @@
 import json
 import logging
-import random
 import torch
 import joblib
 import pandas as pd
@@ -8,9 +7,6 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from .utils import CropRecommendationModel
 from .rotation import build_rotation_matrix
-
-
-
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +29,79 @@ model.load_state_dict(torch.load(MODEL_PATH))
 model.eval()
 
 rotation_matrix = build_rotation_matrix()
+
+
+def validate_fields(data, fields):
+    """Ensure all required fields exist in the input JSON."""
+    missing = [f for f in fields if f not in data]
+    if missing:
+        return False, f"Missing fields: {', '.join(missing)}"
+    return True, None
+
+
+@csrf_exempt
+def crop_recommendation(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Invalid request method"}, status=400)
+
+    try:
+        data = json.loads(request.body)
+        required_fields = ["N", "P", "K", "temperature", "humidity", "ph", "rainfall"]
+        valid, error_msg = validate_fields(data, required_fields)
+        if not valid:
+            return JsonResponse({"error": error_msg}, status=400)
+
+        features = [float(data[f]) for f in required_fields]
+        new_df = pd.DataFrame([features], columns=required_fields)
+        scaled = scaler.transform(new_df)
+        tensor_input = torch.tensor(scaled, dtype=torch.float32)
+
+        with torch.no_grad():
+            output = model(tensor_input)
+            _, predicted = torch.max(output, 1)
+
+        predicted_crop = label_encoder.inverse_transform(predicted.numpy())[0]
+        return JsonResponse({"recommended_crop": predicted_crop})
+
+    except Exception as e:
+        logger.exception("Error in crop_recommendation")
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+def general_recommendation(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Invalid request method"}, status=400)
+
+    try:
+        data = json.loads(request.body)
+        required_fields = ["N", "P", "K", "temperature", "humidity", "ph", "rainfall", "selected_crop"]
+        valid, error_msg = validate_fields(data, required_fields)
+        if not valid:
+            return JsonResponse({"error": error_msg}, status=400)
+
+        features = {f: float(data[f]) for f in ["N", "P", "K", "temperature", "humidity", "ph", "rainfall"]}
+        selected_crop = data["selected_crop"]
+
+        if selected_crop not in optimal_ranges:
+            return JsonResponse({"error": "Crop not found in database"}, status=404)
+
+        recommendations = []
+        for feature, (min_val, max_val) in optimal_ranges[selected_crop].items():
+            value = features[feature]
+            if value < min_val:
+                recommendations.append(f"{feature} is low. Optimal: {min_val:.2f}-{max_val:.2f}")
+            elif value > max_val:
+                recommendations.append(f"{feature} is high. Optimal: {min_val:.2f}-{max_val:.2f}")
+
+        if not recommendations:
+            recommendations.append("All parameters are within the optimal range for the selected crop.")
+
+        return JsonResponse({"recommendations": recommendations})
+
+    except Exception as e:
+        logger.exception("Error in general_recommendation")
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 def validate_fields(data, fields):
