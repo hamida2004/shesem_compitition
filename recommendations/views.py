@@ -105,7 +105,25 @@ def general_recommendation(request):
 
 
 @csrf_exempt
+import json
+import logging
+import random
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+
+logger = logging.getLogger(__name__)
+
+# افترض أن rotation_matrix و optimal_ranges موجودان مسبقًا
+# rotation_matrix = build_rotation_matrix()
+# optimal_ranges = joblib.load("recommendations/models/optimal_ranges.pkl")
+
+@csrf_exempt
 def next_crop(request):
+    """
+    Endpoint to get a recommended next crop (single) based on crop rotation and soil parameters.
+    Expects POST JSON:
+    {
+        "N": float,def next_crop(request):
     """
     Endpoint to get recommended next crops based on crop rotation matrix and sensor data.
     Expects POST JSON:
@@ -169,3 +187,53 @@ def next_crop(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return JsonResponse({"error": "Invalid request method"}, status=400)
+
+        "P": float,
+        "K": float,
+        "temperature": float,
+        "humidity": float,
+        "ph": float,
+        "rainfall": float,
+        "previous_crop": str
+    }
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "Invalid request method"}, status=400)
+
+    try:
+        data = json.loads(request.body)
+        required_fields = ["N", "P", "K", "temperature", "humidity", "ph", "rainfall", "previous_crop"]
+        missing = [f for f in required_fields if f not in data]
+        if missing:
+            return JsonResponse({"error": f"Missing fields: {', '.join(missing)}"}, status=400)
+
+        sensor_data = {f: float(data[f]) for f in ["N", "P", "K", "temperature", "humidity", "ph", "rainfall"]}
+        previous_crop = data["previous_crop"]
+
+        # المحاصيل الممكنة من مصفوفة الدوران
+        possible_next_crops = rotation_matrix.get(previous_crop)
+        if not possible_next_crops:
+            return JsonResponse({"error": "Previous crop not found in rotation matrix"}, status=404)
+
+        # فلترة المحاصيل حسب القيم المثالية للتربة
+        suitable_crops = []
+        for crop in possible_next_crops:
+            if crop not in optimal_ranges:
+                continue
+            crop_ranges = optimal_ranges[crop]
+            suitable = all(crop_ranges[feature][0] <= sensor_data[feature] <= crop_ranges[feature][1]
+                           for feature in sensor_data)
+            if suitable:
+                suitable_crops.append(crop)
+
+        # اختيار محصول واحد من المحاصيل المناسبة أو إذا لم توجد محاصيل مناسبة، اختيار من الممكنة
+        recommended_crop = random.choice(suitable_crops) if suitable_crops else random.choice(possible_next_crops)
+
+        return JsonResponse({
+            "previous_crop": previous_crop,
+            "recommended_next_crop": recommended_crop
+        })
+
+    except Exception as e:
+        logger.error(f"Error in next_crop: {str(e)}")
+        return JsonResponse({"error": str(e)}, status=500)
